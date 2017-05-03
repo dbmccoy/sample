@@ -1,0 +1,68 @@
+---
+output: html_document
+---
+####SHV Weekly MRI Report
+`r format(Sys.Date(), '%m/%d/%y')`
+
+```{r,echo = FALSE,message=FALSE,warning=FALSE}
+library(lubridate)
+library(formattable)
+library(knitr)
+library(xlsx)
+library(dplyr)
+library(reshape)
+
+#run sql manually
+#read data in
+
+d = setwd("//10.0.1.26/Departments/BusinessFunction/DS1/DBM/!Data/MondayReports")
+df = read.table("WeeklyMRI.rpt", header = TRUE, fill = TRUE, sep = "|", quote = "")
+mf = read.table("MonthlyMRI.rpt", header = TRUE, fill = TRUE, sep = "|", quote = "")
+wk = max(df[,"SVC_WEEK"])
+mth = max(mf[,"SVC_MONTH"])
+IP = sum(filter(df,df$Patient_Type == "Inpatient")[1])
+OP = sum(filter(df,df$Patient_Type == "Outpatient")[1])
+df =filter(df,df[,"SVC_WEEK"] >= wk-3)
+mf = filter(mf,mf[,"SVC_MONTH"] >=mth-3)
+mf = filter(mf,mf[,"SVC_MONTH"] < mth)
+
+#Run report on Monday, generate a week from the previous 7 days
+
+sunday = Sys.Date()-1
+FYstart = 2016-10-01
+#Generate names for week columns
+dates = c(paste0(format((sunday)-6,'%m/%d'),"-",format((sunday),'%m/%d'),collapse=NULL)
+         ,paste0(format((sunday)-13,'%m/%d'),"-",format((sunday)-7,'%m/%d'),collapse=NULL)
+         ,paste0(format((sunday)-20,'%m/%d'),"-",format((sunday)-14,'%m/%d'),collapse=NULL)
+         ,paste0(format((sunday)-27,'%m/%d'),"-",format((sunday)-21,'%m/%d'),collapse=NULL))
+dates = gsub("0(\\d)","\\1", dates)
+
+#create pivots
+mdata = melt(df, id = c("Patient_Type","SVC_WEEK"))
+dash = cast(mdata, Patient_Type~SVC_WEEK)
+dash$mth.2 = c(mf[1,1],mf[2,1])
+dash$mth.1 = c(mf[3,1],mf[4,1])
+dash$mth.0 = c(mf[5,1],mf[6,1])
+dash[,1] = NULL
+#add totals line
+dash = rbind(dash,c(colSums(dash[,1:7])))
+perc = c(1:7)
+#add % inpatient line
+for (i in 1:7) {
+  perc[i] = paste(round(dash[1,i]/dash[3,i],2)*100,"%",sep="")
+}
+dash = rbind(dash,perc)
+rownames(dash)=c("Inpatient","Outpatient","Total","Inpatient %")
+
+#set names, run through formattable
+dashb = formattable(dash)
+names(dashb)[1] = dates[4]
+names(dashb)[2] = dates[3]
+names(dashb)[3] = dates[2]
+names(dashb)[4] = dates[1]
+names(dashb)[5] = paste(month.abb[mth-3]," '",format(Sys.Date(),format ="%y"),sep="")
+names(dashb)[6] = paste(month.abb[mth-2]," '",format(Sys.Date(),format ="%y"),sep="")
+names(dashb)[7] = paste(month.abb[mth-1]," '",format(Sys.Date(),format ="%y"),sep="")
+
+dashb
+```
